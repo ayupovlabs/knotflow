@@ -1,0 +1,106 @@
+name: knotflow
+
+services:
+
+    postgres:
+        image: postgres:18-alpine
+        container_name: knotflow-postgres
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: ${POSTGRES_DB}
+            POSTGRES_USER: ${POSTGRES_USER}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+        ports:
+            - "127.0.0.1:5432:5432"
+        volumes:
+            - postgres_data:/var/lib/postgresql
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+        networks:
+            - knotflow
+
+    redis:
+        image: redis:7-alpine
+        container_name: knotflow-redis
+        restart: unless-stopped
+        command: >
+            sh -c 'exec redis-server
+            --appendonly yes
+            --requirepass "$$REDIS_PASSWORD"'
+        environment:
+            REDIS_PASSWORD: ${REDIS_PASSWORD}
+        ports:
+            - "127.0.0.1:6379:6379"
+        volumes:
+            - redis_data:/data
+        healthcheck:
+            test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+            interval: 5s
+            timeout: 5s
+            retries: 10
+        networks:
+            - knotflow
+
+    pgadmin:
+        image: dpage/pgadmin4:latest
+        container_name: knotflow-pgadmin
+        restart: unless-stopped
+        environment:
+            PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+            PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+        ports:
+            - "127.0.0.1:5050:80"
+        volumes:
+            - pgadmin_data:/var/lib/pgadmin
+        depends_on:
+            postgres:
+                condition: service_healthy
+        networks:
+            - knotflow
+
+    mailpit:
+        image: axllent/mailpit:latest
+        container_name: knotflow-mailpit
+        restart: unless-stopped
+        ports:
+            - "127.0.0.1:8025:8025"
+            - "127.0.0.1:1025:1025"
+        networks:
+            - knotflow
+
+volumes:
+    postgres_data:
+    redis_data:
+    pgadmin_data:
+
+networks:
+    knotflow:
+        driver: bridge
+
+# services:
+# ###> doctrine/doctrine-bundle ###
+#   database:
+#     image: postgres:${POSTGRES_VERSION:-16}-alpine
+#     environment:
+#       POSTGRES_DB: ${POSTGRES_DB:-app}
+#       # You should definitely change the password in production
+#       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-!ChangeMe!}
+#       POSTGRES_USER: ${POSTGRES_USER:-app}
+#     healthcheck:
+#       test: ["CMD", "pg_isready", "-d", "${POSTGRES_DB:-app}", "-U", "${POSTGRES_USER:-app}"]
+#       timeout: 5s
+#       retries: 5
+#       start_period: 60s
+#     volumes:
+#       - database_data:/var/lib/postgresql/data:rw
+#       # You may use a bind-mounted host directory instead, so that it is harder to accidentally remove the volume and lose all your data!
+#       # - ./docker/db/data:/var/lib/postgresql/data:rw
+# ###< doctrine/doctrine-bundle ###
+
+# volumes:
+# ###> doctrine/doctrine-bundle ###
+#   database_data:
+# ###< doctrine/doctrine-bundle ###
